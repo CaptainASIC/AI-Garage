@@ -1,0 +1,15 @@
+[Containers]
+ollama = ollama_container_name
+openwebui = openwebui_container_name
+
+[Tabs]
+LLM1 = https://ollama.ai
+LLM2 = https://huggingface.co
+LLM3 = https://openai.com
+
+[StableDiffusion]
+SD1 = https://stability.ai
+SD2 = https://midjourney.com
+
+[Settings]
+# Add any settings you want to be configurable here

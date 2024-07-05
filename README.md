@@ -1,2 +1,2 @@
-# AI-Garage
-A Set of AI tools consolidated into one launcher.
+# Singularity
+An all-in-one AI Utility/Launcher
