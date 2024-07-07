@@ -161,3 +161,5 @@ cython_debug/
 cfg/config.ini
 cache/
 persistent_storage/
+db/
+cfg/*.pkl

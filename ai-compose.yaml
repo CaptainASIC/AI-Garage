@@ -37,13 +37,65 @@ services:
     networks:
       - singularity_net
 
+  sillytavern:
+    <<: *pod-settings
+    image: ghcr.io/sillytavern/sillytavern:latest
+    container_name: sillytavern
+    environment:
+      - TZ=America/Denver
+    ports:
+      - "8000:8000"
+    volumes:
+      - /run/media/asic/Data/Singularity/pods/sillytavern/plugins:/home/node/app/plugins
+      - /run/media/asic/Data/Singularity/pods/sillytavern/config:/home/node/app/config
+      - /run/media/asic/Data/Singularity/pods/sillytavern/data:/home/node/app/data
+    restart: unless-stopped
+    labels:
+      - "io.containers.autoupdate=image"
+    networks:
+      - singularity_net
+
+  a1111:
+    <<: *pod-settings
+    image: rocm/pytorch:latest
+    container_name: a1111
+    devices:
+      - /dev/kfd
+      - /dev/dri
+    group_add:
+      - video
+    ipc: host
+    cap_add:
+      - SYS_PTRACE
+    security_opt:
+      - seccomp=unconfined
+    volumes:
+      - /run/media/asic/Data/Singularity/pods/a1111:/dockerx
+    ports:
+      - "7860:7860"
+    command: >
+      bash -c "
+      cd /dockerx &&
+      if [ ! -d 'stable-diffusion-webui' ]; then
+        git clone https://github.com/AUTOMATIC1111/stable-diffusion-webui &&
+        cd stable-diffusion-webui &&
+        python -m pip install --upgrade pip wheel
+      else
+        cd stable-diffusion-webui &&
+        git pull
+      fi &&
+      pip install -r requirements.txt &&
+      pip install torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/rocm5.4.2 &&
+      REQS_FILE='requirements.txt' python launch.py --precision full --no-half --listen"
+    restart: unless-stopped
+    networks:
+      - singularity_net
+
 networks:
   singularity_net:
     driver: bridge
-    
-#A111
+
+
 #ComfyUI
 #oobabooga
-#sillytavern
-#tavernAI
 #kohyaSS

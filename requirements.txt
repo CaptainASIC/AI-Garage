@@ -2,3 +2,5 @@ PyQt6==6.7.0
 PyQt6-Qt6==6.7.2
 PyQt6-sip==13.6.0
 PyQt6-WebEngine==6.7.0
+psutil==6.0.0
+pynvml==11.5.0

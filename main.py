@@ -1,50 +1,56 @@
 import sys
 import time
 import configparser
-import subprocess
 import os
-import hashlib
-from PyQt6.QtWidgets import (QApplication, QMainWindow, QSplashScreen, QStatusBar, QTabWidget, QWidget, QVBoxLayout, QLabel, 
-                             QPushButton, QHBoxLayout, QStackedWidget, QFormLayout, QLineEdit, QScrollArea)
-from PyQt6.QtGui import QPixmap, QPainter, QColor, QFont, QIcon, QLinearGradient
-from PyQt6.QtCore import Qt, QTimer, QUrl
-from PyQt6.QtWebEngineWidgets import QWebEngineView
-from PyQt6.QtWebEngineCore import QWebEnginePage, QWebEngineProfile
+import pickle
+from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QStatusBar, QTabWidget, QVBoxLayout, QLabel, 
+                             QPushButton, QHBoxLayout, QStackedWidget)
+from PyQt6.QtGui import QPixmap, QPainter, QIcon, QMouseEvent
+from PyQt6.QtCore import Qt, QTimer, QPoint
 from lib.settings import SettingsPage
 from lib.session_manager import session_manager
+from lib.podman import create_status_indicator, update_podman_status, update_container_status, show_container_action_dialog
+from lib.theme import set_color_theme
+from lib.menu import MenuPanel
+from lib.perfmon import PerformanceMonitor
+from lib.browser import create_web_tab, save_tabs, load_tabs, handle_new_tab_request
 
 APP_VERSION = "1.0"
 BUILD_DATE = "Jul 2024"
-
-def get_cache_path(url):
-    cache_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'cache')
-    if not os.path.exists(cache_dir):
-        os.makedirs(cache_dir)
-    url_hash = hashlib.md5(url.encode()).hexdigest()
-    return os.path.join(cache_dir, url_hash)
 
 class CasePreservingConfigParser(configparser.ConfigParser):
     def optionxform(self, optionstr):
         return optionstr
 
-class SplashScreen(QSplashScreen):
+class SplashScreen(QWidget):
     def __init__(self):
-        super().__init__(QPixmap("img/splash.png"))
-        self.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint)
+        super().__init__()
+        self.pixmap = QPixmap("img/splash.png")
+        self.setFixedSize(self.pixmap.size())
+        self.setWindowFlags(Qt.WindowType.WindowStaysOnTopHint | 
+                            Qt.WindowType.FramelessWindowHint |
+                            Qt.WindowType.Tool)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
 
-    def drawContents(self, painter: QPainter):
-        painter.setPen(Qt.GlobalColor.white)
-        painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, "Loading...")
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.drawPixmap(self.rect(), self.pixmap)
+
+    def mousePressEvent(self, event):
+        self.close()
 
 class MainWindow(QMainWindow):
     def __init__(self, config):
         super().__init__()
         self.config = config
+        self.dragging = False
+        self.offset = QPoint()
         self.setup_ui()
 
     def setup_ui(self):
         self.setWindowTitle(f"Captain ASIC's AI Garage - Version {APP_VERSION}")
         self.setGeometry(100, 100, 1200, 800)
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
         
         # Set app icon
         self.setWindowIcon(QIcon("img/ASIC.ico"))
@@ -53,50 +59,79 @@ class MainWindow(QMainWindow):
         self.set_color_theme(self.config.get('Settings', 'ColorTheme', fallback='Dark Red'))
         
         # Create main layout
-        main_layout = QHBoxLayout()
+        main_layout = QVBoxLayout()
+        
+        # Create title bar
+        title_bar = QWidget()
+        title_bar_layout = QHBoxLayout(title_bar)
+        title_bar_layout.setContentsMargins(10, 5, 10, 5)
+        
+        # Create app icon
+        app_icon = QLabel()
+        app_icon_pixmap = QPixmap("img/ASIC.ico").scaled(30, 30, Qt.AspectRatioMode.KeepAspectRatio)
+        app_icon.setPixmap(app_icon_pixmap)
+        title_bar_layout.addWidget(app_icon)
+        
+        title_label = QLabel(f"Captain ASIC's AI Garage - Version {APP_VERSION}")
+        title_bar_layout.addWidget(title_label)
+        title_bar_layout.addStretch()
+        
+        min_button = QPushButton("_")
+        max_button = QPushButton("□")
+        close_button = QPushButton("×")
+        
+        min_button.clicked.connect(self.showMinimized)
+        max_button.clicked.connect(self.toggle_maximize)
+        close_button.clicked.connect(self.close)
+        
+        for button in [min_button, max_button, close_button]:
+            button.setFixedSize(30, 30)
+            title_bar_layout.addWidget(button)
+        
+        main_layout.addWidget(title_bar)
+        
+        # Make the entire title bar draggable
+        title_bar.mousePressEvent = self.mousePressEvent
+        title_bar.mouseMoveEvent = self.mouseMoveEvent
+        title_bar.mouseReleaseEvent = self.mouseReleaseEvent
+        
+        # Create content layout
+        content_layout = QHBoxLayout()
         
         # Create menu panel
-        menu_panel = QWidget()
-        menu_layout = QVBoxLayout(menu_panel)
-        self.home_button = QPushButton("Home")
-        self.llm_button = QPushButton("LLMs")
-        self.sd_button = QPushButton("Stable Diffusion")
-        self.settings_button = QPushButton("Settings")
+        self.menu_panel = MenuPanel()
+        self.menu_panel.page_changed.connect(self.change_page)
+        content_layout.addWidget(self.menu_panel)
         
-        for button in [self.home_button, self.llm_button, self.sd_button, self.settings_button]:
-            button.setFixedSize(150, 50)
-            menu_layout.addWidget(button)
-        
-        menu_layout.addStretch()
+        # Create performance gauges
+        self.perf_monitor = PerformanceMonitor()
+        self.menu_panel.layout().insertWidget(self.menu_panel.layout().count() - 1, self.perf_monitor)
 
-        # Add ASIC.png image
-        asic_label = QLabel()
-        asic_pixmap = QPixmap("img/ASIC.png")
-        asic_label.setPixmap(asic_pixmap.scaled(150, 150, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
-        asic_label.setAlignment(Qt.AlignmentFlag.AlignBottom | Qt.AlignmentFlag.AlignHCenter)
-        menu_layout.addWidget(asic_label)
-
-        main_layout.addWidget(menu_panel)
-        
         # Create stacked widget for different pages
         self.stacked_widget = QStackedWidget()
-        main_layout.addWidget(self.stacked_widget)
+        content_layout.addWidget(self.stacked_widget)
+        
+        main_layout.addLayout(content_layout)
         
         # Create home page
-        home_page = QWidget()
-        home_layout = QVBoxLayout(home_page)
-        home_image = QLabel()
-        home_image.setPixmap(QPixmap("img/splash.png").scaled(800, 600, Qt.AspectRatioMode.KeepAspectRatio))
-        home_layout.addWidget(home_image, alignment=Qt.AlignmentFlag.AlignCenter)
+        home_page = self.create_home_page()
         self.stacked_widget.addWidget(home_page)
         
         # Create LLM page
-        llm_page = QTabWidget()
-        self.stacked_widget.addWidget(llm_page)
+        self.llm_page = QTabWidget()
+        self.stacked_widget.addWidget(self.llm_page)
         
         # Create Stable Diffusion page
-        sd_page = QTabWidget()
-        self.stacked_widget.addWidget(sd_page)
+        self.sd_page = QTabWidget()
+        self.stacked_widget.addWidget(self.sd_page)
+
+        # Create TTS page
+        self.tts_page = QTabWidget()
+        self.stacked_widget.addWidget(self.tts_page)
+
+        # Create STS page
+        self.sts_page = QTabWidget()
+        self.stacked_widget.addWidget(self.sts_page)
         
         # Set up central widget
         central_widget = QWidget()
@@ -120,13 +155,15 @@ class MainWindow(QMainWindow):
         
         # Create status indicators dynamically
         self.status_indicators = {}
-        self.status_indicators['Podman'] = self.create_status_indicator("Podman")
+        self.status_indicators['Podman'] = create_status_indicator("Podman")
         status_layout.addWidget(self.status_indicators['Podman'])
         
-        for container_name in self.config['Containers']:
+        for container_name, container_id in self.config['Containers'].items():
             print(f"Creating indicator for: {container_name}")  # Debug print
-            self.status_indicators[container_name] = self.create_status_indicator(container_name)
-            status_layout.addWidget(self.status_indicators[container_name])
+            indicator = create_status_indicator(container_name)
+            indicator.clicked.connect(lambda name=container_name: self.container_clicked(name))
+            self.status_indicators[container_name] = indicator
+            status_layout.addWidget(indicator)
         
         # Set a fixed width for the status widget to prevent scrollbar
         total_width = sum(indicator.width() for indicator in self.status_indicators.values())
@@ -140,24 +177,26 @@ class MainWindow(QMainWindow):
         status_font.setPointSize(9)
         self.status_bar.setFont(status_font)
         
-        # Set up LLM tabs
-        for key, url in self.config['LLMs'].items():
-            self.create_web_tab(key, url, llm_page)
-        
-        # Set up Stable Diffusion tabs
-        for key, url in self.config['StableDiffusion'].items():
-            self.create_web_tab(key, url, sd_page)
+        # Load saved tabs
+        try:
+            with open('cfg/saved_tabs.pkl', 'rb') as f:
+                saved_tabs = pickle.load(f)
+            load_tabs(self, saved_tabs, self.llm_page, self.sd_page, self.tts_page, self.sts_page)
+        except FileNotFoundError:
+            # If no saved tabs, create default tabs from config
+            for key, url in self.config['LLMs'].items():
+                create_web_tab(self, key, url, self.llm_page)
+            for key, url in self.config['StableDiffusion'].items():
+                create_web_tab(self, key, url, self.sd_page)
+            for key, url in self.config['TTS'].items():
+                create_web_tab(self, key, url, self.tts_page)
+            for key, url in self.config['STS'].items():
+                create_web_tab(self, key, url, self.sts_page)
         
         # Create Settings page
         self.settings_page = SettingsPage(self.config)
         self.settings_page.save_and_reload.connect(self.reload_ui)
         self.stacked_widget.addWidget(self.settings_page)
-        
-        # Connect buttons
-        self.home_button.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(0))
-        self.llm_button.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(1))
-        self.sd_button.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(2))
-        self.settings_button.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(3))
         
         # Update status indicators
         self.update_status_indicators()
@@ -167,146 +206,70 @@ class MainWindow(QMainWindow):
         self.timer.timeout.connect(self.update_status_indicators)
         self.timer.start(5000)  # Update every 5 seconds
 
-    def set_color_theme(self, theme):
-        color_map = {
-            "Dark Red": ("#8B0000", "#4B0000"),
-            "Dark Blue": ("#00008B", "#00004B"),
-            "Dark Green": ("#006400", "#003400"),
-            "Dark Purple": ("#4B0082", "#250041"),
-            "Blackout": ("#000000", "#000000")
-        }
-        base_color, gradient_start = color_map.get(theme, ("#8B0000", "#4B0000"))  # Default to Dark Red
+    def create_home_page(self):
+        home_page = QWidget()
+        home_layout = QVBoxLayout(home_page)
+        home_layout.setContentsMargins(0, 0, 0, 0)  # Remove any margins
+        home_image = QLabel()
+        home_pixmap = QPixmap("img/splash.png")
+        home_image.setPixmap(home_pixmap)
+        home_image.setFixedSize(home_pixmap.size())  # Set fixed size to match the image
+        home_image.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        home_layout.addWidget(home_image, alignment=Qt.AlignmentFlag.AlignCenter)
+        return home_page
 
-        # Set gradient background
-        gradient = QLinearGradient(0, 0, 0, self.height())
-        gradient.setColorAt(0, QColor(gradient_start))
-        gradient.setColorAt(1, QColor(0, 0, 0))  # Black at bottom
-        
-        palette = self.palette()
-        palette.setBrush(self.backgroundRole(), gradient)
-        self.setPalette(palette)
-        self.setAutoFillBackground(True)
-        
-        # Update StyleSheet
-        self.setStyleSheet(f"""
-            QMainWindow, QTabWidget, QStatusBar, QWidget {{
-                color: #ffffff;
-            }}
-            QTabWidget::pane {{
-                border: 1px solid {base_color};
-            }}
-            QTabBar::tab {{
-                background-color: #2d2d2d;
-                color: #ffffff;
-                padding: 8px;
-                border-top-left-radius: 10px;
-                border-top-right-radius: 10px;
-            }}
-            QTabBar::tab:selected {{
-                background-color: {base_color};
-            }}
-            QPushButton {{
-                background-color: #2d2d2d;
-                color: #ffffff;
-                border: 1px solid {base_color};
-                padding: 10px;
-                margin: 5px;
-                border-radius: 15px;
-            }}
-            QPushButton:hover {{
-                background-color: {base_color};
-            }}
-            QScrollArea {{
-                border: none;
-            }}
-            QLineEdit {{
-                background-color: #2d2d2d;
-                color: #ffffff;
-                border: 1px solid #3a3a3a;
-                padding: 5px;
-            }}
-        """)
+    def set_color_theme(self, theme):
+        set_color_theme(self, theme)
 
     def reload_ui(self, theme):
         self.set_color_theme(theme)
-        self.setup_ui()
-        self.update()
-
-    def create_web_tab(self, name, url, tab_widget):
-        profile = QWebEngineProfile(tab_widget)
-        profile.setPersistentStoragePath(get_cache_path(url))
-        
-        page = QWebEnginePage(profile, tab_widget)
-        page.setUrl(QUrl(url))
-        
-        browser = QWebEngineView(tab_widget)
-        browser.setPage(page)
-        
-        tab_widget.addTab(browser, name)  # Use the key (name) as the tab title
-
-    def create_status_indicator(self, name):
-        print(f"Creating status indicator for: {name}")  # Debug print
-        label = QLabel(name)
-        label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        label.setFixedSize(100, 30)  # Reduced width
-        label.setStyleSheet("""
-            QLabel {
-                border: 2px solid #ff4d4d;
-                border-radius: 10px;
-                padding: 2px;
-            }
-        """)
-        return label
+        self.close()
+        new_window = MainWindow(self.config)
+        new_window.show()
 
     def update_status_indicators(self):
-        self.update_podman_status()
-        for container_name in self.config['Containers']:
+        update_podman_status(self.status_indicators['Podman'])
+        for container_name, container_id in self.config['Containers'].items():
             print(f"Updating status for: {container_name}")  # Debug print
-            self.update_container_status(container_name, self.status_indicators[container_name])
+            update_container_status(container_name, container_id, self.status_indicators[container_name])
 
-    def update_podman_status(self):
-        try:
-            subprocess.run(["podman", "info"], check=True, capture_output=True)
-            self.set_status_color(self.status_indicators['Podman'], "green")
-        except subprocess.CalledProcessError:
-            self.set_status_color(self.status_indicators['Podman'], "red")
+    def container_clicked(self, container_name):
+        container_id = self.config['Containers'][container_name]
+        show_container_action_dialog(self, container_name, container_id)
+        self.update_status_indicators()
 
-    def update_container_status(self, container_name, status_widget):
-        try:
-            print(f"Checking status for container: {container_name}")  # Debug print
-            result = subprocess.run(["podman", "inspect", "-f", "{{.State.Status}}", self.config['Containers'][container_name]], 
-                                    check=True, capture_output=True, text=True)
-            status = result.stdout.strip()
-            print(f"Status for {container_name}: {status}")  # Debug print
-            if status == "running":
-                self.set_status_color(status_widget, "green")
-            elif status == "exited":
-                self.set_status_color(status_widget, "red")
-            else:
-                self.set_status_color(status_widget, "yellow")
-        except subprocess.CalledProcessError as e:
-            print(f"Error checking status for {container_name}: {e}")  # Debug print
-            # Check if the exit status is 125
-            if e.returncode == 125:
-                self.set_status_color(status_widget, "red")
-            else:
-                self.set_status_color(status_widget, "yellow")
-
-    def set_status_color(self, widget, color):
-        widget.setStyleSheet(f"""
-            QLabel {{
-                background-color: {color};
-                color: black;
-                border: 2px solid #ff4d4d;
-                border-radius: 10px;
-                padding: 2px;
-            }}
-        """)
+    def change_page(self, index):
+        self.stacked_widget.setCurrentIndex(index)
 
     def closeEvent(self, event):
+        tabs_data = save_tabs(self.llm_page, self.sd_page, self.tts_page, self.sts_page)
+        with open('cfg/saved_tabs.pkl', 'wb') as f:
+            pickle.dump(tabs_data, f)
         with open('cfg/config.ini', 'w') as configfile:
             self.config.write(configfile)
         event.accept()
+
+    def toggle_maximize(self):
+        if self.isMaximized():
+            self.showNormal()
+        else:
+            self.showMaximized()
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.dragging = True
+            self.offset = event.position().toPoint()
+
+    def mouseMoveEvent(self, event):
+        if self.dragging and event.buttons() & Qt.MouseButton.LeftButton:
+            self.move(self.pos() + event.position().toPoint() - self.offset)
+
+    def mouseReleaseEvent(self, event):
+        self.dragging = False
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self.set_color_theme(self.config.get('Settings', 'ColorTheme', fallback='Dark Red'))
 
 def main():
     print("Starting application...")
@@ -320,13 +283,16 @@ def main():
 
     # Show splash screen
     splash = SplashScreen()
+    screen = QApplication.primaryScreen().availableGeometry()
+    splash_geo = splash.geometry()
+    centered_pos = screen.center() - splash_geo.center()
+    splash.move(centered_pos)
     print("Splash screen created")
     splash.show()
     print("Splash screen shown")
     
-
     # Process session data
-    session_data = {'user_id': 123, 'username': 'john'}  # example session data
+    session_data = {'user_id': 1337, 'username': 'ai_garage'}  # example session data
     cookies = [{'name': 'cookie1', 'value': 'value1'}, {'name': 'cookie2', 'value': 'value2'}]  # example cookies
 
     session_manager.save_session(session_data)
@@ -351,12 +317,11 @@ def main():
     # Create and show main window
     main_window = MainWindow(config)
     print("Main window created")
+
+    # Close splash screen and show main window
+    splash.close()
     main_window.show()
     print("Main window shown")
-    
-    # Close splash screen
-    splash.finish(main_window)
-    print("Splash screen finished")
     
     print("Entering main event loop")
     sys.exit(app.exec())

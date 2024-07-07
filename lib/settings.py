@@ -74,10 +74,21 @@ class SettingsPage(QWidget):
         # Stable Diffusion Section
         main_layout.addWidget(self.create_section("StableDiffusion"), 1, 1)
 
+        # TTS Section
+        main_layout.addWidget(self.create_section("TTS"), 2, 0)
+
+        # STS Section
+        main_layout.addWidget(self.create_section("STS"), 2, 1)
+
+        # Clear Cache Button
+        clear_cache_button = QPushButton("Clear Browser Cache")
+        clear_cache_button.clicked.connect(self.clear_cache)
+        main_layout.addWidget(clear_cache_button, 3, 0)
+
         # Save and Reload UI Button
         save_reload_button = QPushButton("Save and Reload UI")
         save_reload_button.clicked.connect(self.save_and_reload_ui)
-        main_layout.addWidget(save_reload_button, 2, 0, 1, 2)
+        main_layout.addWidget(save_reload_button, 3, 1)
 
         self.refresh_tables()
 
@@ -135,9 +146,9 @@ class SettingsPage(QWidget):
             result = subprocess.run(["podman", "ps", "--format", "{{.Names}}"], capture_output=True, text=True, check=True)
             containers = result.stdout.strip().split('\n')
             message = "Running Containers:\n" + "\n".join(containers)
-            QMessageBox.information(self, "Running Containers", message)
+            self.show_themed_message_box("Running Containers", message, QMessageBox.Icon.Information)
         except subprocess.CalledProcessError as e:
-            QMessageBox.warning(self, "Error", f"Failed to fetch running containers: {e}")
+            self.show_themed_message_box("Error", f"Failed to fetch running containers: {e}", QMessageBox.Icon.Warning)
 
     def add_item(self, section):
         name_entry = getattr(self, f"{section.lower()}_name_entry")
@@ -151,10 +162,10 @@ class SettingsPage(QWidget):
             name_entry.clear()
             value_entry.clear()
         else:
-            QMessageBox.warning(self, "Error", "Both name and value must be provided")
+            self.show_themed_message_box("Error", "Both name and value must be provided", QMessageBox.Icon.Warning)
 
     def refresh_tables(self):
-        for section in ["Containers", "LLMs", "StableDiffusion"]:
+        for section in ["Containers", "LLMs", "StableDiffusion", "TTS", "STS"]:
             table = getattr(self, f"{section.lower()}_table")
             self.refresh_table(table, section)
 
@@ -192,9 +203,39 @@ class SettingsPage(QWidget):
             swatch.setChecked(name == theme)
         self.config['Settings']['ColorTheme'] = theme
 
+    def clear_cache(self):
+        if hasattr(self.parent(), 'persistent_profile'):
+            self.parent().persistent_profile.clearHttpCache()
+            self.show_themed_message_box("Cache Cleared", "The browser cache has been cleared.", QMessageBox.Icon.Information)
+        else:
+            self.show_themed_message_box("Error", "Unable to clear cache. Persistent profile not found.", QMessageBox.Icon.Warning)
+
     def save_and_reload_ui(self):
         selected_theme = next(name for name, swatch in self.color_swatches.items() if swatch.isChecked())
         self.config['Settings']['ColorTheme'] = selected_theme
         with open('cfg/config.ini', 'w') as configfile:
             self.config.write(configfile)
         self.save_and_reload.emit(selected_theme)
+
+    def show_themed_message_box(self, title, message, icon):
+        msg_box = QMessageBox(self)
+        msg_box.setWindowTitle(title)
+        msg_box.setText(message)
+        msg_box.setIcon(icon)
+        msg_box.setStyleSheet("""
+            QMessageBox {
+                background-color: #2d2d2d;
+                color: #ffffff;
+            }
+            QPushButton {
+                background-color: #3a3a3a;
+                color: #ffffff;
+                border: 1px solid #4a4a4a;
+                padding: 5px 15px;
+                border-radius: 3px;
+            }
+            QPushButton:hover {
+                background-color: #4a4a4a;
+            }
+        """)
+        msg_box.exec()
