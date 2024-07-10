@@ -263,6 +263,7 @@ class SettingsPage(QWidget):
                 padding: 5px;
             }
         """)
+        self.ollama_model_list.itemDoubleClicked.connect(self.delete_ollama_model)
         ollama_layout.addWidget(self.ollama_model_list)
 
         refresh_button = QPushButton("Refresh Models")
@@ -273,6 +274,25 @@ class SettingsPage(QWidget):
         self.refresh_ollama_models()
 
         return ollama_group
+
+    def delete_ollama_model(self, item):
+        model_name = item.text()
+        reply = QMessageBox.question(self, 'Delete Model',
+                                    f"Do you really want to delete model '{model_name}' from Ollama Services?",
+                                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, 
+                                    QMessageBox.StandardButton.No)
+
+        if reply == QMessageBox.StandardButton.Yes:
+            server_address = self.ollama_server_input.text()
+            try:
+                response = requests.delete(f"{server_address}/api/delete", json={"name": model_name})
+                if response.status_code == 200:
+                    self.show_themed_message_box("Success", f"Model '{model_name}' has been deleted.", QMessageBox.Icon.Information)
+                    self.refresh_ollama_models()
+                else:
+                    self.show_themed_message_box("Error", f"Failed to delete model '{model_name}'. Status code: {response.status_code}", QMessageBox.Icon.Warning)
+            except requests.RequestException as e:
+                self.show_themed_message_box("Error", f"Failed to delete model '{model_name}': {str(e)}", QMessageBox.Icon.Warning)
 
     def refresh_ollama_models(self):
         self.ollama_model_list.clear()
@@ -371,25 +391,25 @@ class SettingsPage(QWidget):
         self.save_and_reload.emit(selected_theme)
 
     def show_themed_message_box(self, title, message, icon):
-            msg_box = QMessageBox(self)
-            msg_box.setWindowTitle(title)
-            msg_box.setText(message)
-            msg_box.setIcon(icon)
-            msg_box.setStyleSheet("""
-                QMessageBox {
-                    background-color: #2d2d2d;
-                    color: #ffffff;
-                }
-                QPushButton {
-                    background-color: #3a3a3a;
-                    color: #ffffff;
-                    border: 1px solid #4a4a4a;
-                    padding: 5px 15px;
-                    border-radius: 3px;
-                }
-                QPushButton:hover {
-                    background-color: #4a4a4a;
-                }
-            """)
-            msg_box.exec()
+        msg_box = QMessageBox(self)
+        msg_box.setWindowTitle(title)
+        msg_box.setText(message)
+        msg_box.setIcon(icon)
+        msg_box.setStyleSheet("""
+            QMessageBox {
+                background-color: #2d2d2d;
+                color: #ffffff;
+            }
+            QPushButton {
+                background-color: #3a3a3a;
+                color: #ffffff;
+                border: 1px solid #4a4a4a;
+                padding: 5px 15px;
+                border-radius: 3px;
+            }
+            QPushButton:hover {
+                background-color: #4a4a4a;
+            }
+        """)
+        msg_box.exec()
 
