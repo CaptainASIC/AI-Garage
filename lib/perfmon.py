@@ -1,9 +1,9 @@
 import psutil
 import math
-from PyQt6.QtWidgets import QWidget, QVBoxLayout
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout
 from PyQt6.QtGui import QPainter, QColor, QPen, QFont, QLinearGradient, QBrush
 from PyQt6.QtCore import Qt, QTimer, QRectF, QPointF
-import pynvml
+import subprocess
 
 class Gauge(QWidget):
     def __init__(self, title, parent=None):
@@ -25,11 +25,8 @@ class Gauge(QWidget):
             self.value = psutil.virtual_memory().percent
         elif self.title == "GPU":
             try:
-                pynvml.nvmlInit()
-                handle = pynvml.nvmlDeviceGetHandleByIndex(0)
-                utilization = pynvml.nvmlDeviceGetUtilizationRates(handle)
-                self.value = utilization.gpu
-                pynvml.nvmlShutdown()
+                with open('/sys/class/drm/card1/device/gpu_busy_percent', 'r') as f:
+                    self.value = float(f.read().strip())
             except:
                 self.value = 0
         self.update()
@@ -88,6 +85,68 @@ class Gauge(QWidget):
         title_rect = QRectF(0, height - 20, width, 20)
         painter.drawText(title_rect, Qt.AlignmentFlag.AlignCenter, self.title)
 
+class TemperatureGauge(QWidget):
+    def __init__(self, title, parent=None):
+        super().__init__(parent)
+        self.title = title
+        self.temperature = 0
+        self.setMinimumSize(100, 120)  # Increased height to accommodate text below
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.updateTemperature)
+        self.timer.start(1000)
+
+    def updateTemperature(self):
+        if self.title == "CPU Temp":
+            self.temperature = self.get_cpu_temperature()
+        elif self.title == "GPU Temp":
+            self.temperature = self.get_gpu_temperature()
+        self.update()
+
+    def get_cpu_temperature(self):
+        try:
+            result = subprocess.run(['sensors'], stdout=subprocess.PIPE, text=True)
+            for line in result.stdout.split('\n'):
+                if 'Tctl' in line:
+                    return float(line.split('+')[1].split('°')[0])
+        except:
+            return 0
+
+    def get_gpu_temperature(self):
+        try:
+            result = subprocess.run(['sensors'], stdout=subprocess.PIPE, text=True)
+            for line in result.stdout.split('\n'):
+                if 'edge' in line:
+                    return float(line.split('+')[1].split('°')[0])
+        except:
+            return 0
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        # Draw the bubble
+        rect = QRectF(5, 5, self.width() - 10, self.height() - 30)  # Reduced height for text below
+        green_value = max(0, min(255, int(255 - self.temperature * 2.55)))
+        color = QColor(255, green_value, 0)  # Red to Green based on temperature
+        painter.setBrush(color)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.drawEllipse(rect)
+
+        # Draw the temperature text
+        painter.setPen(Qt.GlobalColor.white)
+        font = QFont()
+        font.setPointSize(14)
+        painter.setFont(font)
+        temp_rect = QRectF(5, 5, self.width() - 10, self.height() - 30)
+        painter.drawText(temp_rect, Qt.AlignmentFlag.AlignCenter, f"{self.temperature:.1f}°C")
+
+        # Draw the title below the gauge
+        painter.setPen(Qt.GlobalColor.white)
+        font.setPointSize(10)
+        painter.setFont(font)
+        title_rect = QRectF(5, self.height() - 25, self.width() - 10, 20)
+        painter.drawText(title_rect, Qt.AlignmentFlag.AlignCenter, self.title)
+
 class PerformanceMonitor(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -95,10 +154,25 @@ class PerformanceMonitor(QWidget):
 
     def initUI(self):
         layout = QVBoxLayout(self)
-        layout.setSpacing(0)  # Remove spacing between gauges
+        layout.setSpacing(5)  # Add a small spacing between gauges
+
+        # Usage gauges
         self.cpu_gauge = Gauge("CPU", self)
         self.ram_gauge = Gauge("RAM", self)
         self.gpu_gauge = Gauge("GPU", self)
+
+        # Temperature gauges
+        temp_layout = QHBoxLayout()
+        self.cpu_temp_gauge = TemperatureGauge("CPU Temp", self)
+        self.gpu_temp_gauge = TemperatureGauge("GPU Temp", self)
+        temp_layout.addWidget(self.cpu_temp_gauge)
+        temp_layout.addWidget(self.gpu_temp_gauge)
+
         layout.addWidget(self.cpu_gauge)
         layout.addWidget(self.ram_gauge)
         layout.addWidget(self.gpu_gauge)
+        layout.addLayout(temp_layout)
+
+        # Set a fixed height for the temperature gauges
+        self.cpu_temp_gauge.setFixedHeight(120)
+        self.gpu_temp_gauge.setFixedHeight(120)

@@ -10,13 +10,15 @@ from PyQt6.QtCore import Qt, QTimer, QPoint
 from lib.settings import SettingsPage
 from lib.session_manager import session_manager
 from lib.podman import create_status_indicator, update_podman_status, update_container_status, show_container_action_dialog
-from lib.theme import set_color_theme
+from lib.theme import set_color_theme, get_color_theme
 from lib.menu import MenuPanel
 from lib.perfmon import PerformanceMonitor
-from lib.browser import create_web_tab, save_tabs, load_tabs, handle_new_tab_request
+from lib.browser import create_web_tab, load_tabs, get_tab_data
+from lib.chat import LLMPage
 
-APP_VERSION = "1.0"
+APP_VERSION = "1.2.0"
 BUILD_DATE = "Jul 2024"
+os.environ['QTWEBENGINE_DISABLE_SANDBOX'] = '1'
 
 class CasePreservingConfigParser(configparser.ConfigParser):
     def optionxform(self, optionstr):
@@ -51,12 +53,16 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(f"Captain ASIC's AI Garage - Version {APP_VERSION}")
         self.setGeometry(100, 100, 1200, 800)
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
-        
+
+        # Get the theme color
+        theme_color = self.config.get('Settings', 'ColorTheme', fallback='Dark Red')
+        base_color, _ = get_color_theme(theme_color)
+
         # Set app icon
         self.setWindowIcon(QIcon("img/ASIC.ico"))
 
         # Set initial color theme
-        self.set_color_theme(self.config.get('Settings', 'ColorTheme', fallback='Dark Red'))
+        self.set_color_theme(theme_color)
         
         # Create main layout
         main_layout = QVBoxLayout()
@@ -99,7 +105,7 @@ class MainWindow(QMainWindow):
         content_layout = QHBoxLayout()
         
         # Create menu panel
-        self.menu_panel = MenuPanel()
+        self.menu_panel = MenuPanel(base_color)
         self.menu_panel.page_changed.connect(self.change_page)
         content_layout.addWidget(self.menu_panel)
         
@@ -113,35 +119,26 @@ class MainWindow(QMainWindow):
         
         main_layout.addLayout(content_layout)
         
-        # Create home page
-        home_page = self.create_home_page()
-        self.stacked_widget.addWidget(home_page)
-        
-        # Create LLM page
-        self.llm_page = QTabWidget()
-        self.stacked_widget.addWidget(self.llm_page)
-        
-        # Create Stable Diffusion page
+        # Create pages
+        self.home_page = self.create_home_page()
+        self.llm_page = LLMPage(self.config, base_color)
         self.sd_page = QTabWidget()
-        self.stacked_widget.addWidget(self.sd_page)
-
-        # Create TTS page
         self.tts_page = QTabWidget()
-        self.stacked_widget.addWidget(self.tts_page)
-
-        # Create STS page
         self.sts_page = QTabWidget()
+        self.settings_page = SettingsPage(self.config)
+
+        # Add pages to stacked widget
+        self.stacked_widget.addWidget(self.home_page)
+        self.stacked_widget.addWidget(self.llm_page)
+        self.stacked_widget.addWidget(self.sd_page)
+        self.stacked_widget.addWidget(self.tts_page)
         self.stacked_widget.addWidget(self.sts_page)
+        self.stacked_widget.addWidget(self.settings_page)
         
         # Set up central widget
         central_widget = QWidget()
         central_widget.setLayout(main_layout)
         self.setCentralWidget(central_widget)
-
-        # Debug print
-        print("Containers in config:")
-        for container_name, container_value in self.config['Containers'].items():
-            print(f"  {container_name} = {container_value}")
         
         # Create status bar
         self.status_bar = QStatusBar()
@@ -178,25 +175,7 @@ class MainWindow(QMainWindow):
         self.status_bar.setFont(status_font)
         
         # Load saved tabs
-        try:
-            with open('cfg/saved_tabs.pkl', 'rb') as f:
-                saved_tabs = pickle.load(f)
-            load_tabs(self, saved_tabs, self.llm_page, self.sd_page, self.tts_page, self.sts_page)
-        except FileNotFoundError:
-            # If no saved tabs, create default tabs from config
-            for key, url in self.config['LLMs'].items():
-                create_web_tab(self, key, url, self.llm_page)
-            for key, url in self.config['StableDiffusion'].items():
-                create_web_tab(self, key, url, self.sd_page)
-            for key, url in self.config['TTS'].items():
-                create_web_tab(self, key, url, self.tts_page)
-            for key, url in self.config['STS'].items():
-                create_web_tab(self, key, url, self.sts_page)
-        
-        # Create Settings page
-        self.settings_page = SettingsPage(self.config)
-        self.settings_page.save_and_reload.connect(self.reload_ui)
-        self.stacked_widget.addWidget(self.settings_page)
+        self.load_tabs()
         
         # Update status indicators
         self.update_status_indicators()
@@ -221,8 +200,35 @@ class MainWindow(QMainWindow):
     def set_color_theme(self, theme):
         set_color_theme(self, theme)
 
+    def load_tabs(self):
+        try:
+            with open('cfg/saved_tabs.pkl', 'rb') as f:
+                saved_tabs = pickle.load(f)
+            self.llm_page.load_tabs(saved_tabs.get('llm', []))
+            load_tabs(self, saved_tabs.get('sd', []), self.sd_page)
+            load_tabs(self, saved_tabs.get('tts', []), self.tts_page)
+            load_tabs(self, saved_tabs.get('sts', []), self.sts_page)
+        except FileNotFoundError:
+            self.create_default_tabs()
+
+    def create_default_tabs(self):
+        for key, url in self.config['LLMs'].items():
+            create_web_tab(self, key, url, self.llm_page.tab_widget)
+        for key, url in self.config['StableDiffusion'].items():
+            create_web_tab(self, key, url, self.sd_page)
+        for key, url in self.config['TTS'].items():
+            create_web_tab(self, key, url, self.tts_page)
+        for key, url in self.config['STS'].items():
+            create_web_tab(self, key, url, self.sts_page)
+
     def reload_ui(self, theme):
         self.set_color_theme(theme)
+        base_color, _ = get_color_theme(theme)
+        self.menu_panel.theme_color = base_color
+        self.llm_page.theme_color = base_color
+        self.menu_panel.set_selected(self.menu_panel.current_index)
+        if hasattr(self.llm_page, 'current_service'):
+            self.llm_page.set_selected_service(self.llm_page.current_service)
         self.close()
         new_window = MainWindow(self.config)
         new_window.show()
@@ -242,7 +248,12 @@ class MainWindow(QMainWindow):
         self.stacked_widget.setCurrentIndex(index)
 
     def closeEvent(self, event):
-        tabs_data = save_tabs(self.llm_page, self.sd_page, self.tts_page, self.sts_page)
+        tabs_data = {
+            'llm': self.llm_page.get_tab_data(),
+            'sd': get_tab_data(self.sd_page),
+            'tts': get_tab_data(self.tts_page),
+            'sts': get_tab_data(self.sts_page)
+        }
         with open('cfg/saved_tabs.pkl', 'wb') as f:
             pickle.dump(tabs_data, f)
         with open('cfg/config.ini', 'w') as configfile:

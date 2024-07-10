@@ -1,15 +1,28 @@
 [Containers]
-ollama = ollama_container_name
-openwebui = openwebui_container_name
+Ollama = ollama
+Open-WebUI = open-webui
 
-[Tabs]
-LLM1 = https://ollama.ai
-LLM2 = https://huggingface.co
-LLM3 = https://openai.com
+[LLMs]
+Ollama = http://127.0.0.1:8080
 
 [StableDiffusion]
-SD1 = https://stability.ai
-SD2 = https://midjourney.com
+ComfyUI = http://127.0.0.1:8188
+A1111 = http://127.0.0.1:7860
+CivitAI = https://civitai.com
+
+[TTS]
+XTTS = http://127.0.0.1
+
+[STS]
+MoshiAI = https://us.moshi.chat/
 
 [Settings]
-# Add any settings you want to be configurable here
+ColorTheme = Dark Red
+ChatGPT = False
+ChatGPT_API_Key = 
+Claude = False
+Claude_API_Key = 
+Ollama = True
+OllamaServer = http://127.0.0.1:11434
+
+[Ollama]

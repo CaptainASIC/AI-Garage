@@ -18,10 +18,10 @@ AI Garage is a comprehensive application designed to manage and interact with va
 
 1. Clone the repository:\
 `https://github.com/CaptainASIC/AI-Garage`
-2. Install the required dependencies:\
-`pip install -r requirements.txt`
+2. Run the setup script:\
+`./setup.sh`
 3. Run the application:\
-`python3 main.py`
+`./launch.sh`
 
 ## Configuration
 

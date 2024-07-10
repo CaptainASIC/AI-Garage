@@ -163,3 +163,5 @@ cache/
 persistent_storage/
 db/
 cfg/*.pkl
+launch.sh
+history/
