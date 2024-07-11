@@ -16,7 +16,7 @@ from lib.perfmon import PerformanceMonitor
 from lib.browser import create_web_tab, load_tabs, get_tab_data
 from lib.chat import LLMPage
 
-APP_VERSION = "1.2.0"
+APP_VERSION = "1.2.1"
 BUILD_DATE = "Jul 2024"
 os.environ['QTWEBENGINE_DISABLE_SANDBOX'] = '1'
 

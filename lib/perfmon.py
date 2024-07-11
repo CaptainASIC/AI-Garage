@@ -1,9 +1,11 @@
 import psutil
 import math
+import json
+import subprocess
+import configparser
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout
 from PyQt6.QtGui import QPainter, QColor, QPen, QFont, QLinearGradient, QBrush
 from PyQt6.QtCore import Qt, QTimer, QRectF, QPointF
-import subprocess
 
 class Gauge(QWidget):
     def __init__(self, title, parent=None):
@@ -24,12 +26,34 @@ class Gauge(QWidget):
         elif self.title == "RAM":
             self.value = psutil.virtual_memory().percent
         elif self.title == "GPU":
+            self.value = self.get_gpu_usage()
+        self.update()
+
+    def get_gpu_usage(self):
+        gpu_type = self.parent().gpu_type
+        if gpu_type == "NVIDIA":
+            try:
+                import pynvml
+                pynvml.nvmlInit()
+                handle = pynvml.nvmlDeviceGetHandleByIndex(0)
+                util = pynvml.nvmlDeviceGetUtilizationRates(handle)
+                return util.gpu
+            except:
+                return 0
+        elif gpu_type == "AMD":
             try:
                 with open('/sys/class/drm/card1/device/gpu_busy_percent', 'r') as f:
-                    self.value = float(f.read().strip())
+                    return float(f.read().strip())
             except:
-                self.value = 0
-        self.update()
+                return 0
+        elif gpu_type == "Intel":
+            try:
+                result = subprocess.run(['intel_gpu_top', '-J'], capture_output=True, text=True)
+                data = json.loads(result.stdout)
+                return data['engines']['Render/3D/0']['busy']
+            except:
+                return 0
+        return 0
 
     def paintEvent(self, event):
         painter = QPainter(self)
@@ -112,13 +136,33 @@ class TemperatureGauge(QWidget):
             return 0
 
     def get_gpu_temperature(self):
-        try:
-            result = subprocess.run(['sensors'], stdout=subprocess.PIPE, text=True)
-            for line in result.stdout.split('\n'):
-                if 'edge' in line:
-                    return float(line.split('+')[1].split('°')[0])
-        except:
-            return 0
+        gpu_type = self.parent().gpu_type
+        if gpu_type == "NVIDIA":
+            try:
+                import pynvml
+                pynvml.nvmlInit()
+                handle = pynvml.nvmlDeviceGetHandleByIndex(0)
+                temp = pynvml.nvmlDeviceGetTemperature(handle, pynvml.NVML_TEMPERATURE_GPU)
+                return temp
+            except:
+                return 0
+        elif gpu_type == "AMD":
+            try:
+                result = subprocess.run(['sensors'], stdout=subprocess.PIPE, text=True)
+                for line in result.stdout.split('\n'):
+                    if 'edge' in line:
+                        return float(line.split('+')[1].split('°')[0])
+            except:
+                return 0
+        elif gpu_type == "Intel":
+            try:
+                result = subprocess.run(['sensors'], stdout=subprocess.PIPE, text=True)
+                for line in result.stdout.split('\n'):
+                    if 'temp1' in line:
+                        return float(line.split('+')[1].split('°')[0])
+            except:
+                return 0
+        return 0
 
     def paintEvent(self, event):
         painter = QPainter(self)
@@ -150,6 +194,10 @@ class TemperatureGauge(QWidget):
 class PerformanceMonitor(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.config = configparser.ConfigParser()
+        self.config.read('cfg/config.ini')
+        self.cpu_type = self.config['Settings'].get('CPUType', 'Intel')
+        self.gpu_type = self.config['Settings'].get('GPUType', 'NVIDIA')
         self.initUI()
 
     def initUI(self):

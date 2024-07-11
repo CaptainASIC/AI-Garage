@@ -2,7 +2,8 @@ import subprocess
 import time
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QPushButton, QLineEdit, QTableWidget, 
                              QTableWidgetItem, QHBoxLayout, QLabel, QMessageBox, QGridLayout,
-                             QCheckBox, QGroupBox, QListWidget, QListWidgetItem, QApplication)
+                             QCheckBox, QGroupBox, QListWidget, QListWidgetItem, QApplication,
+                             QRadioButton, QButtonGroup)
 from PyQt6.QtCore import Qt, pyqtSignal, QTimer
 from PyQt6.QtGui import QColor
 import requests
@@ -34,7 +35,7 @@ class SettingsPage(QWidget):
     def init_ui(self):
         self.main_layout = QGridLayout(self)
 
-        # Top section (Color Theme and AI Services)
+        # Top section (Color Theme, Hardware Configuration, and AI Services)
         top_widget = QWidget()
         top_layout = QHBoxLayout(top_widget)
 
@@ -57,6 +58,76 @@ class SettingsPage(QWidget):
         self.color_swatches[self.config.get('Settings', 'ColorTheme', fallback='Dark Red')].setChecked(True)
         
         top_layout.addWidget(color_theme_group)
+
+        # CPU and GPU Type Section
+        cpu_gpu_group = QGroupBox("Hardware Configuration")
+        cpu_gpu_layout = QGridLayout(cpu_gpu_group)
+
+        # CPU Type
+        cpu_label = QLabel("CPU Type:")
+        cpu_label.setStyleSheet("color: white;")
+        cpu_gpu_layout.addWidget(cpu_label, 0, 0)
+
+        self.cpu_group = QButtonGroup(self)
+        cpu_types = ["Intel", "AMD", "ARM"]
+        for i, cpu_type in enumerate(cpu_types):
+            radio = QRadioButton(cpu_type)
+            radio.setStyleSheet("""
+                QRadioButton {
+                    color: white;
+                }
+                QRadioButton::indicator {
+                    width: 13px;
+                    height: 13px;
+                    border: 1px solid white;
+                    border-radius: 7px;
+                }
+                QRadioButton::indicator:unchecked {
+                    background-color: transparent;
+                }
+                QRadioButton::indicator:checked {
+                    background-color: black;
+                    border: 2px solid white;
+                }
+            """)
+            self.cpu_group.addButton(radio)
+            cpu_gpu_layout.addWidget(radio, 0, i+1)
+            if self.config['Settings'].get('CPUType', 'Intel') == cpu_type:
+                radio.setChecked(True)
+
+        # GPU Type
+        gpu_label = QLabel("GPU Type:")
+        gpu_label.setStyleSheet("color: white;")
+        cpu_gpu_layout.addWidget(gpu_label, 1, 0)
+
+        self.gpu_group = QButtonGroup(self)
+        gpu_types = ["Intel", "NVIDIA", "AMD"]
+        for i, gpu_type in enumerate(gpu_types):
+            radio = QRadioButton(gpu_type)
+            radio.setStyleSheet("""
+                QRadioButton {
+                    color: white;
+                }
+                QRadioButton::indicator {
+                    width: 13px;
+                    height: 13px;
+                    border: 1px solid white;
+                    border-radius: 7px;
+                }
+                QRadioButton::indicator:unchecked {
+                    background-color: transparent;
+                }
+                QRadioButton::indicator:checked {
+                    background-color: black;
+                    border: 2px solid white;
+                }
+            """)
+            self.gpu_group.addButton(radio)
+            cpu_gpu_layout.addWidget(radio, 1, i+1)
+            if self.config['Settings'].get('GPUType', 'NVIDIA') == gpu_type:
+                radio.setChecked(True)
+
+        top_layout.addWidget(cpu_gpu_group)
 
         # AI Services Section
         ai_services_group = QGroupBox("AI Services")
@@ -274,7 +345,7 @@ class SettingsPage(QWidget):
         self.refresh_ollama_models()
 
         return ollama_group
-
+                                                                              
     def delete_ollama_model(self, item):
         model_name = item.text()
         reply = QMessageBox.question(self, 'Delete Model',
@@ -382,12 +453,18 @@ class SettingsPage(QWidget):
         self.config['Settings']['Ollama'] = str(self.ollama_checkbox.isChecked())
         self.config['Settings']['OllamaServer'] = self.ollama_server_input.text()
 
+        # Save CPU and GPU types
+        self.config['Settings']['CPUType'] = self.cpu_group.checkedButton().text()
+        self.config['Settings']['GPUType'] = self.gpu_group.checkedButton().text()
+        
         for service, checkbox in self.service_checkboxes.items():
             self.config['Settings'][service] = str(checkbox.isChecked())
             self.config['Settings'][f"{service}_API_Key"] = self.api_key_inputs[service].text()
 
         with open('cfg/config.ini', 'w') as configfile:
             self.config.write(configfile)
+        
+        print("Configuration saved. Emitting save_and_reload signal.")
         self.save_and_reload.emit(selected_theme)
 
     def show_themed_message_box(self, title, message, icon):
@@ -412,4 +489,3 @@ class SettingsPage(QWidget):
             }
         """)
         msg_box.exec()
-
