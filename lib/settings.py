@@ -395,9 +395,10 @@ class SettingsPage(QWidget):
         
         if name and value:
             self.config[section][name] = value
-            self.refresh_tables()
             name_entry.clear()
             value_entry.clear()
+            table = getattr(self, f"{section.lower()}_table")
+            self.refresh_table(table, section)
         else:
             self.show_themed_message_box("Error", "Both name and value must be provided", QMessageBox.Icon.Warning)
 
@@ -407,6 +408,12 @@ class SettingsPage(QWidget):
             self.refresh_table(table, section)
 
     def refresh_table(self, table, section):
+        # Try to disconnect the signal, but don't raise an error if it's not connected
+        try:
+            table.cellChanged.disconnect()
+        except TypeError:
+            pass  # Signal was not connected, which is fine
+
         table.setRowCount(0)
         for name, value in self.config[section].items():
             row_position = table.rowCount()
@@ -418,22 +425,22 @@ class SettingsPage(QWidget):
             table.setItem(row_position, 0, name_item)
             table.setItem(row_position, 1, value_item)
 
+        # Connect the signal
         table.cellChanged.connect(lambda row, column: self.update_item(row, column, table, section))
 
     def update_item(self, row, column, table, section):
-        name = table.item(row, 0).text()
-        value = table.item(row, 1).text()
-        old_name = list(self.config[section].keys())[row]
+        name_item = table.item(row, 0)
+        value_item = table.item(row, 1)
+        if name_item and value_item:
+            name = name_item.text()
+            value = value_item.text()
+            old_name = list(self.config[section].keys())[row]
 
-        if column == 0:  # Name changed
-            del self.config[section][old_name]
-            self.config[section][name] = value
-        else:  # Value changed
-            self.config[section][name] = value
-
-        # Disconnect and reconnect to prevent recursive calls
-        table.cellChanged.disconnect()
-        self.refresh_table(table, section)
+            if column == 0:  # Name changed
+                del self.config[section][old_name]
+                self.config[section][name] = value
+            else:  # Value changed
+                self.config[section][name] = value
 
     def select_color_theme(self, theme):
         for name, swatch in self.color_swatches.items():

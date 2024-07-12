@@ -15,8 +15,9 @@ from lib.menu import MenuPanel
 from lib.perfmon import PerformanceMonitor
 from lib.browser import create_web_tab, load_tabs, get_tab_data
 from lib.chat import LLMPage
+from lib.custom_tab_widget import CustomTabWidget
 
-APP_VERSION = "1.2.1"
+APP_VERSION = "1.2.2"
 BUILD_DATE = "Jul 2024"
 os.environ['QTWEBENGINE_DISABLE_SANDBOX'] = '1'
 
@@ -122,10 +123,11 @@ class MainWindow(QMainWindow):
         # Create pages
         self.home_page = self.create_home_page()
         self.llm_page = LLMPage(self.config, base_color)
-        self.sd_page = QTabWidget()
-        self.tts_page = QTabWidget()
-        self.sts_page = QTabWidget()
+        self.sd_page = CustomTabWidget()
+        self.tts_page = CustomTabWidget()
+        self.sts_page = CustomTabWidget()
         self.settings_page = SettingsPage(self.config)
+        self.settings_page.save_and_reload.connect(self.on_save_and_reload)
 
         # Add pages to stacked widget
         self.stacked_widget.addWidget(self.home_page)
@@ -185,6 +187,40 @@ class MainWindow(QMainWindow):
         self.timer.timeout.connect(self.update_status_indicators)
         self.timer.start(5000)  # Update every 5 seconds
 
+    def on_save_and_reload(self, selected_theme):
+        print(f"Reloading UI with theme: {selected_theme}")
+        
+        # Re-read the config file
+        self.config.read('cfg/config.ini')
+
+        # Apply the new theme
+        self.apply_theme(selected_theme)
+
+        # Reload other parts of the UI
+        self.reload_ui_components()
+        
+        # Reload tabs
+        self.load_tabs()
+
+        # Reload other parts of the UI
+        self.reload_ui_components()
+
+        # Update the LLM page
+        self.llm_page.load_local_services()
+
+        # Force a repaint of the entire window
+        self.repaint()
+
+    def apply_theme(self, theme):
+        set_color_theme(self, theme)
+
+    def reload_ui_components(self):
+        self.settings_page.refresh_tables()
+
+        if hasattr(self, 'performance_monitor'):
+            self.performance_monitor.cpu_type = self.config['Settings'].get('CPUType', 'Intel')
+            self.performance_monitor.gpu_type = self.config['Settings'].get('GPUType', 'NVIDIA')
+
     def create_home_page(self):
         home_page = QWidget()
         home_layout = QVBoxLayout(home_page)
@@ -204,22 +240,33 @@ class MainWindow(QMainWindow):
         try:
             with open('cfg/saved_tabs.pkl', 'rb') as f:
                 saved_tabs = pickle.load(f)
-            self.llm_page.load_tabs(saved_tabs.get('llm', []))
-            load_tabs(self, saved_tabs.get('sd', []), self.sd_page)
-            load_tabs(self, saved_tabs.get('tts', []), self.tts_page)
-            load_tabs(self, saved_tabs.get('sts', []), self.sts_page)
         except FileNotFoundError:
-            self.create_default_tabs()
+            saved_tabs = {}
 
-    def create_default_tabs(self):
-        for key, url in self.config['LLMs'].items():
-            create_web_tab(self, key, url, self.llm_page.tab_widget)
-        for key, url in self.config['StableDiffusion'].items():
-            create_web_tab(self, key, url, self.sd_page)
-        for key, url in self.config['TTS'].items():
-            create_web_tab(self, key, url, self.tts_page)
-        for key, url in self.config['STS'].items():
-            create_web_tab(self, key, url, self.sts_page)
+        # Clear existing tabs
+        self.llm_page.tab_widget.clear()
+        self.sd_page.clear()
+        self.tts_page.clear()
+        self.sts_page.clear()
+
+        # Load tabs from config, restore saved state if available
+        self.load_section_tabs('LLMs', self.llm_page.tab_widget, saved_tabs.get('llm', []))
+        self.load_section_tabs('StableDiffusion', self.sd_page, saved_tabs.get('sd', []))
+        self.load_section_tabs('TTS', self.tts_page, saved_tabs.get('tts', []))
+        self.load_section_tabs('STS', self.sts_page, saved_tabs.get('sts', []))
+
+    def load_section_tabs(self, section, tab_widget, saved_tabs):
+        config_urls = {url: name for name, url in self.config[section].items()}
+        
+        # First, restore saved tabs that are still in the config
+        for name, url in saved_tabs:
+            if url in config_urls:
+                create_web_tab(self, name, url, tab_widget)
+                del config_urls[url]  # Remove this URL from the dict as it's been processed
+        
+        # Then, add any new tabs from the config
+        for url, name in config_urls.items():
+            create_web_tab(self, name, url, tab_widget)
 
     def reload_ui(self, theme):
         self.set_color_theme(theme)
@@ -249,7 +296,7 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):
         tabs_data = {
-            'llm': self.llm_page.get_tab_data(),
+            'llm': get_tab_data(self.llm_page.tab_widget),
             'sd': get_tab_data(self.sd_page),
             'tts': get_tab_data(self.tts_page),
             'sts': get_tab_data(self.sts_page)
