@@ -1,5 +1,4 @@
 version: "3"
-
 x-pod-settings: &pod-settings
   hostname: singularity
 
@@ -12,7 +11,7 @@ services:
       - /dev/kfd
       - /dev/dri
     volumes:
-      - /run/media/asic/Data/Singularity/pods/ollama:/root/.ollama
+      - ${OLLAMA_VOLUME}:/root/.ollama
     ports:
       - "11434:11434"
     restart: unless-stopped
@@ -26,7 +25,7 @@ services:
     image: ghcr.io/open-webui/open-webui:main
     container_name: open-webui
     volumes:
-      - /run/media/asic/Data/Singularity/pods/open-webui:/app/backend/data
+      - ${OPEN_WEBUI_VOLUME}:/app/backend/data
     ports:
       - "8080:8080"
     environment:
@@ -46,9 +45,9 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - /run/media/asic/Data/Singularity/pods/sillytavern/plugins:/home/node/app/plugins
-      - /run/media/asic/Data/Singularity/pods/sillytavern/config:/home/node/app/config
-      - /run/media/asic/Data/Singularity/pods/sillytavern/data:/home/node/app/data
+      - ${SILLYTAVERN_PLUGINS_VOLUME}:/home/node/app/plugins
+      - ${SILLYTAVERN_CONFIG_VOLUME}:/home/node/app/config
+      - ${SILLYTAVERN_DATA_VOLUME}:/home/node/app/data
     restart: unless-stopped
     labels:
       - "io.containers.autoupdate=image"
@@ -70,7 +69,7 @@ services:
     security_opt:
       - seccomp=unconfined
     volumes:
-      - /run/media/asic/Data/Singularity/pods/a1111:/dockerx
+      - ${A1111_VOLUME}:/dockerx
     ports:
       - "7860:7860"
     command: >
@@ -91,11 +90,29 @@ services:
     networks:
       - singularity_net
 
+  comfyui:
+    image: p3rco/comfyui-red
+    container_name: comfyui-red
+    ports:
+      - "8188:8188"
+    volumes:
+      - ${COMFYUI_CONFIG_VOLUME}:/app/config
+      - ${COMFYUI_MODELS_VOLUME}:/app/models
+      - ${COMFYUI_OUTPUT_VOLUME}:/app/output
+      - ${COMFYUI_CUSTOM_NODES_VOLUME}:/app/custom_nodes
+    devices:
+      - /dev/kfd:/dev/kfd
+      - /dev/dri:/dev/dri
+    group_add:
+      - video
+    command: ["--listen", "0.0.0.0", "--port", "8188"]
+    restart: unless-stopped
+    networks:
+      - singularity_net
+
 networks:
   singularity_net:
     driver: bridge
 
-
-#ComfyUI
 #oobabooga
 #kohyaSS
