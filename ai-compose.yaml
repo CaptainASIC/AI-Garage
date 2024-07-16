@@ -91,7 +91,7 @@ services:
       - singularity_net
 
   comfyui:
-    image: p3rco/comfyui-red
+    image: captainasic/comfyui-red
     container_name: comfyui-red
     ports:
       - "8188:8188"
