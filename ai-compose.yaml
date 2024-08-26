@@ -100,6 +100,7 @@ services:
       - ${COMFYUI_MODELS_VOLUME}:/app/models
       - ${COMFYUI_OUTPUT_VOLUME}:/app/output
       - ${COMFYUI_CUSTOM_NODES_VOLUME}:/app/custom_nodes
+      - ${COMFYUI_WORKFLOWS_VOLUME}:/app/my_workflows
     devices:
       - /dev/kfd:/dev/kfd
       - /dev/dri:/dev/dri
