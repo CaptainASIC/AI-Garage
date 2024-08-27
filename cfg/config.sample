@@ -22,7 +22,11 @@ ChatGPT = False
 ChatGPT_API_Key = 
 Claude = False
 Claude_API_Key = 
+Gemini = False
+Gemini_API_Key = 
 Ollama = True
 OllamaServer = http://127.0.0.1:11434
+CPUType = AMD
+GPUType = AMD
 
 [Ollama]

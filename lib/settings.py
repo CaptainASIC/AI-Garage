@@ -136,7 +136,7 @@ class SettingsPage(QWidget):
         self.service_checkboxes = {}
         self.api_key_inputs = {}
 
-        for service in ["ChatGPT", "Claude"]:
+        for service in ["ChatGPT", "Claude", "Gemini"]:
             service_layout = QHBoxLayout()
             checkbox = QCheckBox(service)
             checkbox.setStyleSheet("""

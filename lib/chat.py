@@ -1,4 +1,5 @@
 import anthropic
+import google.generativeai as genai
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QListWidget, QTextEdit, 
                              QLineEdit, QPushButton, QSplitter, QFileDialog, QLabel, 
                              QTabWidget, QStackedWidget, QMessageBox, QInputDialog, QListWidgetItem,
@@ -254,6 +255,57 @@ class ChatGPTWidget(AIServiceWidget):
             except Exception as e:
                 self.show_error_message(str(e))
 
+class GeminiChatWidget(AIServiceWidget):
+    def __init__(self, api_key):
+        genai.configure(api_key=api_key)
+        self.model = None
+        super().__init__(api_key)
+
+    def get_models(self):
+        return ["gemini-pro", "gemini-pro-vision"]
+
+    def setup_model_selection(self, layout):
+        self.model_group = QButtonGroup(self)
+        for i, model in enumerate(self.get_models()):
+            radio = QRadioButton(model)
+            radio.setStyleSheet("""
+                QRadioButton {
+                    color: white;
+                }
+                QRadioButton::indicator:checked {
+                    background-color: black;
+                    border: 2px solid white;
+                }
+            """)
+            self.model_group.addButton(radio, i)
+            layout.addWidget(radio)
+        self.model_group.button(0).setChecked(True)
+
+    def send_message(self):
+        user_message = self.message_input.text()
+        if user_message:
+            if not self.current_chat_id:
+                self.new_chat()
+
+            self.new_message.emit("user", user_message)
+            self.current_chat.append({"role": "user", "content": user_message})
+            self.update_chat_display()
+            self.message_input.clear()
+
+            try:
+                model_name = self.model_group.checkedButton().text()
+                if not self.model or self.model.model_name != model_name:
+                    self.model = genai.GenerativeModel(model_name)
+
+                response = self.model.generate_content(user_message)
+                assistant_message = response.text
+                self.new_message.emit("assistant", assistant_message)
+                self.current_chat.append({"role": "assistant", "content": assistant_message})
+                self.update_chat_display()
+                self.save_chat_history()
+            except Exception as e:
+                self.show_error_message(str(e))
+
 class LLMPage(TransparentWidget):
     def __init__(self, config, theme_color):
         super().__init__()
@@ -271,12 +323,14 @@ class LLMPage(TransparentWidget):
         self.local_services_button = QPushButton("Local Services")
         self.claude_button = QPushButton("Claude")
         self.chatgpt_button = QPushButton("ChatGPT")
-        for button in [self.ollama_button, self.local_services_button, self.claude_button, self.chatgpt_button]:
+        self.gemini_button = QPushButton("Gemini")  # Add Gemini button
+        for button in [self.ollama_button, self.local_services_button, self.claude_button, self.chatgpt_button, self.gemini_button]:
             button.setStyleSheet(f"color: white; background-color: rgba(255, 255, 255, 30); border: 1px solid {self.theme_color}; border-radius: 15px; padding: 5px;")
         button_layout.addWidget(self.ollama_button)
         button_layout.addWidget(self.local_services_button)
         button_layout.addWidget(self.claude_button)
         button_layout.addWidget(self.chatgpt_button)
+        button_layout.addWidget(self.gemini_button)
         button_layout.addStretch()
         layout.addLayout(button_layout)
 
@@ -285,6 +339,7 @@ class LLMPage(TransparentWidget):
         self.local_services_button.clicked.connect(lambda: self.set_selected_service("Local Services"))
         self.claude_button.clicked.connect(lambda: self.set_selected_service("Claude"))
         self.chatgpt_button.clicked.connect(lambda: self.set_selected_service("ChatGPT"))
+        self.gemini_button.clicked.connect(lambda: self.set_selected_service("Gemini"))
 
         # Tab widget for local services
         self.tab_widget = CustomTabWidget()
@@ -319,12 +374,21 @@ class LLMPage(TransparentWidget):
         else:
             self.ai_services_stack.addWidget(QLabel("ChatGPT is not enabled or API key is missing."))
 
+        # Add Gemini widget
+        gemini_api_key = self.config['Settings'].get('Gemini_API_Key', '')
+        if self.config['Settings'].getboolean('Gemini', fallback=False) and gemini_api_key:
+            self.gemini_chat = GeminiChatWidget(gemini_api_key)
+            self.ai_services_stack.addWidget(self.gemini_chat)
+        else:
+            self.ai_services_stack.addWidget(QLabel("Gemini is not enabled or API key is missing."))
+
+
         # Show Ollama by default
         self.set_selected_service("Ollama")
 
     def set_selected_service(self, service):
         self.current_service = service
-        buttons = [self.ollama_button, self.local_services_button, self.claude_button, self.chatgpt_button]
+        buttons = [self.ollama_button, self.local_services_button, self.claude_button, self.chatgpt_button, self.gemini_button]
         for button in buttons:
             if button.text() == service:
                 button.setStyleSheet(f"""
@@ -359,6 +423,8 @@ class LLMPage(TransparentWidget):
             self.show_claude()
         elif service == "ChatGPT":
             self.show_chatgpt()
+        elif service == "Gemini":
+            self.show_gemini()
 
     def load_local_services(self):
         # Clear existing tabs first
@@ -386,6 +452,11 @@ class LLMPage(TransparentWidget):
     def show_chatgpt(self):
         self.tab_widget.hide()
         self.ai_services_stack.setCurrentIndex(2)  # Assuming ChatGPT is the third widget
+        self.ai_services_stack.show()
+
+    def show_gemini(self):
+        self.tab_widget.hide()
+        self.ai_services_stack.setCurrentIndex(3)  # Assuming Gemini is the fourth widget
         self.ai_services_stack.show()
 
     def show_local_services(self):

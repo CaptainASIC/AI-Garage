@@ -17,8 +17,8 @@ from lib.browser import create_web_tab, load_tabs, get_tab_data
 from lib.chat import LLMPage
 from lib.custom_tab_widget import CustomTabWidget
 
-APP_VERSION = "1.2.3"
-BUILD_DATE = "Jul 2024"
+APP_VERSION = "1.3.0"
+BUILD_DATE = "Aug 2024"
 os.environ['QTWEBENGINE_DISABLE_SANDBOX'] = '1'
 
 class CasePreservingConfigParser(configparser.ConfigParser):
