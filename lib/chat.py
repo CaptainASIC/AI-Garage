@@ -6,8 +6,8 @@ from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QListWidget, QTe
                              QRadioButton, QButtonGroup)
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QIcon, QPalette, QColor
-from lib.browser import create_web_tab
-from lib.custom_tab_widget import CustomTabWidget
+from lib.enhanced_browser import EnhancedTabWidget, get_tab_data
+
 import json
 import uuid
 
@@ -342,7 +342,7 @@ class LLMPage(TransparentWidget):
         self.gemini_button.clicked.connect(lambda: self.set_selected_service("Gemini"))
 
         # Tab widget for local services
-        self.tab_widget = CustomTabWidget()
+        self.tab_widget = EnhancedTabWidget()
         self.tab_widget.setStyleSheet("QTabWidget::pane { border: 1px solid white; }"
                                       "QTabBar::tab { color: white; background-color: rgba(255, 255, 255, 30); }"
                                       "QTabBar::tab:selected { background-color: rgba(255, 255, 255, 60); }")
