@@ -6,7 +6,7 @@ AI Garage is a comprehensive application designed to manage and interact with va
 
 - **Unified Dashboard**: Access all your AI tools from a single, intuitive interface.
 - **Language Model Integration**: Interact with various LLMs through a tabbed interface.
-- **Stable Diffusion Support**: Manage and use Stable Diffusion models for image generation.
+- **Generative AI (GAI) Support**: Manage and use Stable Diffusion models for image generation.
 - **Text-to-Speech (TTS)**: Convert text to speech using integrated TTS services.
 - **Speech-to-Text (STS)**: Transcribe audio to text with STS capabilities.
 - **Container Management**: Monitor and control Docker containers running AI services.

@@ -19,9 +19,9 @@ class MenuPanel(QWidget):
         self.buttons = [
             self.create_button("Home", 0),
             self.create_button("LLMs", 1),
-            self.create_button("Stable Diffusion", 2),
-            self.create_button("TTS", 3),
-            self.create_button("STS", 4),
+            self.create_button("Generative AI", 2),
+            self.create_button("Text-To-Speech", 3),
+            self.create_button("Speech-To-Speech", 4),
             self.create_button("Settings", 5)
         ]
         

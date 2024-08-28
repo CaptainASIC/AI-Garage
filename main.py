@@ -16,7 +16,7 @@ from lib.perfmon import PerformanceMonitor
 from lib.chat import LLMPage
 from lib.enhanced_browser import EnhancedTabWidget, get_tab_data
 
-APP_VERSION = "1.3.1"
+APP_VERSION = "1.3.2"
 BUILD_DATE = "Aug 2024"
 os.environ['QTWEBENGINE_DISABLE_SANDBOX'] = '1'
 
@@ -249,9 +249,9 @@ class MainWindow(QMainWindow):
 
         # Load tabs from config, restore saved state if available
         self.load_section_tabs('LLMs', self.llm_page.tab_widget, saved_tabs.get('llm', []))
-        self.load_section_tabs('StableDiffusion', self.sd_page, saved_tabs.get('sd', []))
-        self.load_section_tabs('TTS', self.tts_page, saved_tabs.get('tts', []))
-        self.load_section_tabs('STS', self.sts_page, saved_tabs.get('sts', []))
+        self.load_section_tabs('Generative AI', self.sd_page, saved_tabs.get('sd', []))
+        self.load_section_tabs('Text-To-Speech', self.tts_page, saved_tabs.get('tts', []))
+        self.load_section_tabs('Speech-To-Speech', self.sts_page, saved_tabs.get('sts', []))
 
     def load_section_tabs(self, section, tab_widget, saved_tabs):
         print(f"Loading tabs for section: {section}")

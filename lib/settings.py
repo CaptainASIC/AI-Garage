@@ -201,14 +201,14 @@ class SettingsPage(QWidget):
         # LLMs Section
         self.main_layout.addWidget(self.create_section("LLMs"), 2, 0)
 
-        # Stable Diffusion Section
-        self.main_layout.addWidget(self.create_section("StableDiffusion"), 2, 1)
+        # Generative Section
+        self.main_layout.addWidget(self.create_section("Generative AI"), 2, 1)
 
         # TTS Section
-        self.main_layout.addWidget(self.create_section("TTS"), 3, 0)
+        self.main_layout.addWidget(self.create_section("Text-To-Speech"), 3, 0)
 
         # STS Section
-        self.main_layout.addWidget(self.create_section("STS"), 3, 1)
+        self.main_layout.addWidget(self.create_section("Speech-To-Speech"), 3, 1)
 
         # Bottom buttons
         bottom_widget = QWidget()
@@ -403,7 +403,7 @@ class SettingsPage(QWidget):
             self.show_themed_message_box("Error", "Both name and value must be provided", QMessageBox.Icon.Warning)
 
     def refresh_tables(self):
-        for section in ["Containers", "LLMs", "StableDiffusion", "TTS", "STS"]:
+        for section in ["Containers", "LLMs", "Generative AI", "Text-To-Speech", "Speech-To-Speech"]:
             table = getattr(self, f"{section.lower()}_table")
             self.refresh_table(table, section)
 
