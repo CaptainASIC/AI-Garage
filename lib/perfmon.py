@@ -3,7 +3,7 @@ import math
 import json
 import subprocess
 import configparser
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel
 from PyQt6.QtGui import QPainter, QColor, QPen, QFont, QLinearGradient, QBrush
 from PyQt6.QtCore import Qt, QTimer, QRectF, QPointF
 
@@ -60,16 +60,16 @@ class Gauge(QWidget):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         width = self.width()
         height = self.height()
-        
+
         # Set up the gauge area
         gauge_rect = QRectF(15, 15, width - 30, (height - 30) * 2)
         center = gauge_rect.center()
         radius = gauge_rect.width() / 2
-        
+
         # Draw the background arc
         painter.setPen(QPen(Qt.GlobalColor.darkGray, 10))
         painter.drawArc(gauge_rect, 180 * 16, 180 * 16)
-        
+
         # Draw the colored arc
         gradient = QLinearGradient(gauge_rect.topLeft(), gauge_rect.topRight())
         gradient.setColorAt(0, Qt.GlobalColor.green)
@@ -78,7 +78,7 @@ class Gauge(QWidget):
         painter.setPen(QPen(QBrush(gradient), 10))
         span_angle = int(self.value * 1.8 * 16)
         painter.drawArc(gauge_rect, 180 * 16, -span_angle)
-        
+
         # Draw tick marks and labels
         painter.setPen(QPen(Qt.GlobalColor.white, 2))
         painter.setFont(QFont('Arial', 8))
@@ -89,21 +89,21 @@ class Gauge(QWidget):
             x2 = center.x() + radius * math.cos(angle)
             y2 = center.y() - radius * math.sin(angle)
             painter.drawLine(QPointF(x1, y1), QPointF(x2, y2))
-            
+
             if i % 2 == 0:
                 label = str(i * 10)
                 text_width = painter.fontMetrics().horizontalAdvance(label)
                 text_x = x1 - text_width / 2
                 text_y = y1 + 15
                 painter.drawText(QPointF(text_x, text_y), label)
-        
+
         # Draw the value
         painter.setPen(Qt.GlobalColor.white)
         painter.setFont(QFont('Arial', 18, QFont.Weight.Bold))
         value_text = f"{round(self.value)}%"
         value_rect = QRectF(0, height/2 - 0, width, 30)
         painter.drawText(value_rect, Qt.AlignmentFlag.AlignCenter, value_text)
-        
+
         # Draw title label
         painter.setFont(QFont('Arial', 12))
         title_rect = QRectF(0, height - 20, width, 20)
@@ -202,12 +202,23 @@ class PerformanceMonitor(QWidget):
 
     def initUI(self):
         layout = QVBoxLayout(self)
-        layout.setSpacing(5)  # Add a small spacing between gauges
+        layout.setSpacing(10)  # Increased spacing between gauges
 
-        # Usage gauges
+        # Usage gauges and info labels
         self.cpu_gauge = Gauge("CPU", self)
+        self.cpu_info = QLabel(self)
+        self.cpu_info.setStyleSheet("color: white; font-size: 12px;")
+        self.cpu_info.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
         self.ram_gauge = Gauge("RAM", self)
+        self.ram_info = QLabel(self)
+        self.ram_info.setStyleSheet("color: white; font-size: 12px;")
+        self.ram_info.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
         self.gpu_gauge = Gauge("GPU", self)
+        self.gpu_info = QLabel(self)
+        self.gpu_info.setStyleSheet("color: white; font-size: 12px;")
+        self.gpu_info.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         # Temperature gauges
         temp_layout = QHBoxLayout()
@@ -217,10 +228,54 @@ class PerformanceMonitor(QWidget):
         temp_layout.addWidget(self.gpu_temp_gauge)
 
         layout.addWidget(self.cpu_gauge)
+        layout.addWidget(self.cpu_info)
         layout.addWidget(self.ram_gauge)
+        layout.addWidget(self.ram_info)
         layout.addWidget(self.gpu_gauge)
+        layout.addWidget(self.gpu_info)
         layout.addLayout(temp_layout)
 
         # Set a fixed height for the temperature gauges
         self.cpu_temp_gauge.setFixedHeight(120)
         self.gpu_temp_gauge.setFixedHeight(120)
+
+        # Timer to update info labels
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.updateInfo)
+        self.timer.start(1000)
+
+    def updateInfo(self):
+        # Update CPU info
+        cpu_freq = psutil.cpu_freq()
+        self.cpu_info.setText(f"Clock: {cpu_freq.current:.2f} Hz")
+
+        # Update RAM info
+        mem = psutil.virtual_memory()
+        self.ram_info.setText(f"Used: {mem.used / (1024**3):.1f} GB / Total: {mem.total / (1024**3):.1f} GB")
+
+        # Update GPU info
+        self.gpu_info.setText(f"Clock: {self.get_gpu_clock()}")
+
+    def get_gpu_clock(self):
+        if self.gpu_type == "NVIDIA":
+            try:
+                import pynvml
+                pynvml.nvmlInit()
+                handle = pynvml.nvmlDeviceGetHandleByIndex(0)
+                clock = pynvml.nvmlDeviceGetClockInfo(handle, pynvml.NVML_CLOCK_GRAPHICS)
+                return f"{clock} MHz"
+            except:
+                return "N/A"
+        elif self.gpu_type == "AMD":
+            try:
+                with open('/sys/class/drm/card1/device/pp_dpm_sclk', 'r') as f:
+                    lines = f.readlines()
+                    for line in lines:
+                        if '*' in line:
+                            return line.split(':')[1].strip()
+                return "N/A"
+            except:
+                return "N/A"
+        elif self.gpu_type == "Intel":
+            return "N/A"  # Intel GPU clock speed is not easily accessible
+        return "N/A"

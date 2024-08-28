@@ -86,7 +86,7 @@ class SettingsPage(QWidget):
                     background-color: transparent;
                 }
                 QRadioButton::indicator:checked {
-                    background-color: black;
+                    background-color: white;
                     border: 2px solid white;
                 }
             """)
@@ -118,7 +118,7 @@ class SettingsPage(QWidget):
                     background-color: transparent;
                 }
                 QRadioButton::indicator:checked {
-                    background-color: black;
+                    background-color: white;
                     border: 2px solid white;
                 }
             """)
