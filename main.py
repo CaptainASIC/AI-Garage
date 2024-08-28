@@ -16,7 +16,7 @@ from lib.perfmon import PerformanceMonitor
 from lib.chat import LLMPage
 from lib.enhanced_browser import EnhancedTabWidget, get_tab_data
 
-APP_VERSION = "1.3.5"
+APP_VERSION = "1.3.6"
 BUILD_DATE = "Aug 2024"
 os.environ['QTWEBENGINE_DISABLE_SANDBOX'] = '1'
 
@@ -147,28 +147,31 @@ class MainWindow(QMainWindow):
         self.status_bar = QStatusBar()
         self.setStatusBar(self.status_bar)
 
-        # Create a widget to hold all status indicators
-        status_widget = QWidget()
-        status_layout = QHBoxLayout(status_widget)
-        status_layout.setSpacing(5)  # Reduce spacing between indicators
-        status_layout.setContentsMargins(0, 0, 0, 0)  # Remove margins
+               # Create a widget to hold all status indicators
+        self.status_widget = QWidget()
+        self.status_layout = QHBoxLayout(self.status_widget)
+        self.status_layout.setSpacing(5)
+        self.status_layout.setContentsMargins(0, 0, 0, 0)
 
         # Create status indicators dynamically
         self.status_indicators = {}
         self.status_indicators['Podman'] = create_status_indicator("Podman")
-        status_layout.addWidget(self.status_indicators['Podman'])
+        self.status_layout.addWidget(self.status_indicators['Podman'])
 
         for container_name, container_id in self.config['Containers'].items():
-            print(f"Creating indicator for: {container_name}")  # Debug print
+            print(f"Creating indicator for: {container_name}")
             indicator = create_status_indicator(container_name)
             indicator.clicked.connect(lambda name=container_name: self.container_clicked(name))
             self.status_indicators[container_name] = indicator
-            status_layout.addWidget(indicator)
+            self.status_layout.addWidget(indicator)
 
         # Set a fixed width for the status widget to prevent scrollbar
         total_width = sum(indicator.width() for indicator in self.status_indicators.values())
-        status_widget.setFixedWidth(total_width + (len(self.status_indicators) - 1) * 5)  # Add spacing
-        self.status_bar.addPermanentWidget(status_widget)
+        self.status_widget.setFixedWidth(total_width + (len(self.status_indicators) - 1) * 5)
+        self.status_bar.addPermanentWidget(self.status_widget)
+
+        # Check if containers are enabled and update UI accordingly
+        self.update_container_visibility()
 
         # Increase status bar height and text size
         self.status_bar.setFixedHeight(40)
@@ -186,6 +189,10 @@ class MainWindow(QMainWindow):
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.update_status_indicators)
         self.timer.start(5000)  # Update every 5 seconds
+
+    def update_container_visibility(self):
+        containers_enabled = self.config['Settings'].getboolean('EnableContainers', fallback=True)
+        self.status_widget.setVisible(containers_enabled)
 
     def on_save_and_reload(self, selected_theme):
         print(f"Reloading UI with theme: {selected_theme}")
@@ -268,9 +275,11 @@ class MainWindow(QMainWindow):
             tab_widget.create_web_tab(name, url)
 
     def update_status_indicators(self):
-        update_podman_status(self.status_indicators['Podman'])
-        for container_name, container_id in self.config['Containers'].items():
-            update_container_status(container_name, container_id, self.status_indicators[container_name])
+        if self.config['Settings'].getboolean('EnableContainers', fallback=True):
+            update_podman_status(self.status_indicators['Podman'])
+            for container_name, container_id in self.config['Containers'].items():
+                update_container_status(container_name, container_id, self.status_indicators[container_name])
+
 
     def container_clicked(self, container_name):
         container_id = self.config['Containers'][container_name]
@@ -363,6 +372,9 @@ def main():
     # Close splash screen and show main window
     splash.close()
     main_window.show()
+
+    # Update container visibility after showing the main window
+    main_window.update_container_visibility()
 
     sys.exit(app.exec())
 

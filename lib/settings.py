@@ -35,6 +35,37 @@ class SettingsPage(QWidget):
     def init_ui(self):
         self.main_layout = QGridLayout(self)
 
+        # Add Containers toggle
+        containers_toggle_group = QGroupBox("Containers")
+        containers_toggle_layout = QVBoxLayout(containers_toggle_group)
+        self.containers_checkbox = QCheckBox("Enable Containers Footer")
+        self.containers_checkbox.setChecked(self.config['Settings'].getboolean('EnableContainers', fallback=True))
+        self.containers_checkbox.setStyleSheet("""
+            QCheckBox {
+                color: white;
+            }
+            QCheckBox::indicator {
+                width: 13px;
+                height: 13px;
+                border: 1px solid white;
+            }
+            QCheckBox::indicator:unchecked {
+                background-color: transparent;
+            }
+            QCheckBox::indicator:checked {
+                background-color: green;
+            }
+            QCheckBox::indicator:checked::after {
+                content: '✓';
+                color: black;
+                position: absolute;
+                top: -3px;
+                left: 1px;
+                font-size: 14px;
+                font-weight: bold;
+            }
+        """)
+
         # Top section (Color Theme, Hardware Configuration, and AI Services)
         top_widget = QWidget()
         top_layout = QHBoxLayout(top_widget)
@@ -193,7 +224,8 @@ class SettingsPage(QWidget):
         fetch_button.setStyleSheet("color: white; background-color: rgba(255, 255, 255, 30);")
         containers_layout.addWidget(fetch_button)
         
-        self.main_layout.addWidget(containers_group, 1, 0)
+        # Containers Section
+        self.main_layout.addWidget(self.create_section("Containers"), 1, 0)
 
         # Ollama Section
         self.main_layout.addWidget(self.setup_ollama_section(), 1, 1)
@@ -232,6 +264,38 @@ class SettingsPage(QWidget):
         group = QGroupBox(section_name)
         group.setStyleSheet("QGroupBox { color: white; }")
         layout = QVBoxLayout(group)
+
+        if section_name == "Containers":
+            # Add Containers toggle checkbox
+            self.containers_checkbox = QCheckBox("Enable Containers Footer")
+            self.containers_checkbox.setChecked(self.config['Settings'].getboolean('EnableContainers', fallback=True))
+            self.containers_checkbox.setStyleSheet("""
+                QCheckBox {
+                    color: white;
+                }
+                QCheckBox::indicator {
+                    width: 13px;
+                    height: 13px;
+                    border: 1px solid white;
+                }
+                QCheckBox::indicator:unchecked {
+                    background-color: transparent;
+                }
+                QCheckBox::indicator:checked {
+                    background-color: green;
+                }
+                QCheckBox::indicator:checked::after {
+                    content: '✓';
+                    color: black;
+                    position: absolute;
+                    top: -3px;
+                    left: 1px;
+                    font-size: 14px;
+                    font-weight: bold;
+                }
+            """)
+            layout.addWidget(self.containers_checkbox)
+
         self.setup_input_section(layout, section_name)
         table = self.create_table()
         layout.addWidget(table)
@@ -459,6 +523,7 @@ class SettingsPage(QWidget):
         self.config['Settings']['ColorTheme'] = selected_theme
         self.config['Settings']['Ollama'] = str(self.ollama_checkbox.isChecked())
         self.config['Settings']['OllamaServer'] = self.ollama_server_input.text()
+        self.config['Settings']['EnableContainers'] = str(self.containers_checkbox.isChecked())
 
         # Save CPU and GPU types
         self.config['Settings']['CPUType'] = self.cpu_group.checkedButton().text()
