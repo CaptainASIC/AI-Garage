@@ -16,7 +16,7 @@ from lib.perfmon import PerformanceMonitor
 from lib.chat import LLMPage
 from lib.enhanced_browser import EnhancedTabWidget, get_tab_data
 
-APP_VERSION = "1.3.7"
+APP_VERSION = "1.3.8"
 BUILD_DATE = "Aug 2024"
 os.environ['QTWEBENGINE_DISABLE_SANDBOX'] = '1'
 
@@ -84,17 +84,36 @@ class MainWindow(QMainWindow):
         title_bar_layout.addWidget(title_label)
         title_bar_layout.addStretch()
 
-        min_button = QPushButton("_")
-        max_button = QPushButton("□")
-        close_button = QPushButton("×")
+        # Create window control buttons
+        close_button = QPushButton("X")
+        minimize_button = QPushButton("-")
+        maximize_button = QPushButton("◻")
 
-        min_button.clicked.connect(self.showMinimized)
-        max_button.clicked.connect(self.toggle_maximize)
+        for button in [close_button, minimize_button, maximize_button]:
+            button.setFixedSize(40, 40)
+            button.setStyleSheet("""
+                QPushButton {
+                    border-radius: 6px;
+                    border: none;
+                }
+                QPushButton:hover {
+                    background-color: rgba(0, 0, 0, 30);
+                }
+            """)
+
+        close_button.setStyleSheet(close_button.styleSheet() + "background-color: #FF5F56;")
+        minimize_button.setStyleSheet(minimize_button.styleSheet() + "background-color: #FFBD2E;")
+        maximize_button.setStyleSheet(maximize_button.styleSheet() + "background-color: #27C93F;")
+
+        minimize_button.clicked.connect(self.showMinimized)
+        maximize_button.clicked.connect(self.toggle_maximize)
         close_button.clicked.connect(self.close)
+        
+        title_bar_layout.addWidget(minimize_button)
+        title_bar_layout.addWidget(maximize_button)
+        title_bar_layout.addWidget(close_button)
 
-        for button in [min_button, max_button, close_button]:
-            button.setFixedSize(30, 30)
-            title_bar_layout.addWidget(button)
+        title_bar_layout.addSpacing(10)
 
         main_layout.addWidget(title_bar)
 
@@ -107,13 +126,18 @@ class MainWindow(QMainWindow):
         content_layout = QHBoxLayout()
 
         # Create menu panel
-        self.menu_panel = MenuPanel(base_color)
+        self.menu_panel = MenuPanel(base_color, APP_VERSION, BUILD_DATE)  # Pass APP_VERSION and BUILD_DATE here
         self.menu_panel.page_changed.connect(self.change_page)
         content_layout.addWidget(self.menu_panel)
 
         # Create performance gauges
         self.perf_monitor = PerformanceMonitor()
-        self.menu_panel.layout().insertWidget(self.menu_panel.layout().count() - 1, self.perf_monitor)
+        # Insert the performance monitor into the menu panel layout, ensuring it's centered
+        self.menu_panel.layout().insertWidget(
+            self.menu_panel.layout().count() - 1,  # Insert before the last widget (which is likely a spacer)
+            self.perf_monitor,
+            alignment=Qt.AlignmentFlag.AlignHCenter  # Ensure horizontal center alignment
+        )
 
         # Create stacked widget for different pages
         self.stacked_widget = QStackedWidget()

@@ -24,13 +24,13 @@ MAIN_SCRIPT="launch.sh"
 # Check for required packages and install if missing
 if [ "$OS_FAMILY" = "debian" ]; then
     PKG_MANAGER="apt-get"
-    REQUIRED_PKGS="lm-sensors python3 python3-pip python3-pyqt6 python3-pyqt6-webengine qtwebengine mesa qt6-base"
+    REQUIRED_PKGS="lm-sensors python3 python3-pip python3-pyqt6 python3-pyqt6-webengine qtwebengine mesa qt6-base libwebp6"
 elif [ "$OS_FAMILY" = "rhel" ]; then
     PKG_MANAGER="dnf"
-    REQUIRED_PKGS="lm_sensors python3 python3-pip python3-qt6 python3-qt6-webengine qt-webengine mesa-libGL qt6-base"
+    REQUIRED_PKGS="lm_sensors python3 python3-pip python3-qt6 python3-qt6-webengine qt-webengine mesa-libGL qt6-base libwebp"
 elif [ "$OS_FAMILY" = "arch" ]; then
     PKG_MANAGER="pacman"
-    REQUIRED_PKGS="lm_sensors python python-pip python-pyqt6 python-pyqt6-webengine qt-webengine mesa qt6-base"
+    REQUIRED_PKGS="lm_sensors python python-pip python-pyqt6 python-pyqt6-webengine qt-webengine mesa qt6-base libwebp"
 fi
 
 for pkg in $REQUIRED_PKGS; do

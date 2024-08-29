@@ -2,16 +2,22 @@ import psutil
 import platform
 import subprocess
 import re
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QFrame, QSpacerItem, QSizePolicy
-from PyQt6.QtGui import QPixmap
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QFrame, 
+                             QSpacerItem, QSizePolicy, QMessageBox)
+from PyQt6.QtGui import QPixmap, QDesktopServices
+from PyQt6.QtCore import Qt, pyqtSignal, QUrl
+
+APP_VERSION = "1.3.5"
+BUILD_DATE = "Aug 2024"
 
 class MenuPanel(QWidget):
     page_changed = pyqtSignal(int)
 
-    def __init__(self, theme_color):
+    def __init__(self, theme_color, app_version, build_date):
         super().__init__()
         self.theme_color = theme_color
+        self.app_version = app_version
+        self.build_date = build_date
         self.setup_ui()
         self.current_index = 0  # Track the current selected index
 
@@ -22,11 +28,13 @@ class MenuPanel(QWidget):
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(0, 10, 0, 10)
         main_layout.setSpacing(0)
+        main_layout.setAlignment(Qt.AlignmentFlag.AlignHCenter)
 
         # Button layout
         button_layout = QVBoxLayout()
         button_layout.setSpacing(10)  # Add some spacing between buttons
-        
+        button_layout.setAlignment(Qt.AlignmentFlag.AlignHCenter)
+
         self.buttons = [
             self.create_button("Home", 0),
             self.create_button("LLMs", 1),
@@ -38,7 +46,7 @@ class MenuPanel(QWidget):
 
         for button in self.buttons:
             button.setFixedSize(150, 50)
-            button_layout.addWidget(button, 0, Qt.AlignmentFlag.AlignHCenter)
+            button_layout.addWidget(button)
 
         button_layout.addStretch(1)
         main_layout.addLayout(button_layout)
@@ -46,18 +54,21 @@ class MenuPanel(QWidget):
         # Bottom info layout
         bottom_info = QFrame()
         bottom_layout = QVBoxLayout(bottom_info)
+        bottom_layout.setAlignment(Qt.AlignmentFlag.AlignHCenter)
 
-        # Add ASIC.png image
-        asic_label = QLabel()
+        # Add ASIC.png image (clickable)
+        self.asic_label = QLabel()
         asic_pixmap = QPixmap("img/ASIC.png")
-        asic_label.setPixmap(asic_pixmap.scaled(150, 150, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
-        asic_label.setAlignment(Qt.AlignmentFlag.AlignBottom | Qt.AlignmentFlag.AlignHCenter)
-        bottom_layout.addWidget(asic_label)
+        self.asic_label.setPixmap(asic_pixmap.scaled(150, 150, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+        self.asic_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.asic_label.mousePressEvent = self.show_about_popup
+        self.asic_label.setCursor(Qt.CursorShape.PointingHandCursor)
+        bottom_layout.addWidget(self.asic_label)
 
         # Add system info label
         self.system_info_label = QLabel()
         self.system_info_label.setStyleSheet("color: lightgray; font-size: 10px;")
-        self.system_info_label.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignHCenter)
+        self.system_info_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.system_info_label.setWordWrap(True)
         bottom_layout.addWidget(self.system_info_label)
 
@@ -105,6 +116,53 @@ class MenuPanel(QWidget):
                 """)
         self.current_index = index
 
+    def show_about_popup(self, event):
+        about_text = f"""
+        <h2>Captain ASIC's AI Garage</h2>
+        <p>Version: {self.app_version}</p>
+        <p>Build Date: {self.build_date}</p>
+        <p>Thank you for using Captain ASIC's AI Garage!</p>
+        <p>This application is designed to provide a comprehensive environment for AI development and experimentation.</p>
+        <p>For more information, updates, and to contribute, please visit our GitHub repository:</p>
+        <p><a href="https://github.com/CaptainASIC/AI-Garage">https://github.com/CaptainASIC/AI-Garage</a></p>
+        """
+
+        msg_box = QMessageBox(self)
+        msg_box.setWindowTitle("About Captain ASIC's AI Garage")
+
+        # Create a QLabel with the about text
+        label = QLabel(about_text)
+        label.setTextFormat(Qt.TextFormat.RichText)
+        label.setOpenExternalLinks(True)
+        label.setTextInteractionFlags(Qt.TextInteractionFlag.TextBrowserInteraction)
+
+        # Set the label as the message box's informative text
+        msg_box.setInformativeText(about_text)
+
+        msg_box.setStandardButtons(QMessageBox.StandardButton.Ok)
+        
+        msg_box.setStyleSheet(f"""
+            QMessageBox {{
+                background-color: {self.theme_color};
+                color: white;
+            }}
+            QLabel {{
+                color: white;
+            }}
+            QPushButton {{
+                background-color: rgba(255, 255, 255, 30);
+                color: white;
+                border: 1px solid white;
+                border-radius: 5px;
+                padding: 5px 15px;
+            }}
+            QPushButton:hover {{
+                background-color: rgba(255, 255, 255, 45);
+            }}
+        """)
+
+        msg_box.exec()
+
     def update_system_info(self):
         cpu_info = self.get_cpu_info()
         total_memory = psutil.virtual_memory().total / (1024**3)  # in GB
@@ -115,7 +173,7 @@ class MenuPanel(QWidget):
         info_text += f"{cpu_info}\n\n"
         info_text += f"{gpu_info}\n\n"
         info_text += f"{total_memory:.1f} GB System RAM\n\n"
-        
+
         info_text += f"Disks:\n{disk_info}\n\n"
         info_text += f"{os_info}"
 
