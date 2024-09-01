@@ -433,7 +433,7 @@ class LLMPage(TransparentWidget):
 
         # Add tabs for each LLM service
         for key, url in self.config['LLMs'].items():
-            create_web_tab(self, key, url, self.tab_widget)
+            self.tab_widget.create_web_tab(key, url)
 
         # Set the first tab as active if it exists
         if self.tab_widget.count() > 0:

@@ -16,8 +16,8 @@ from lib.perfmon import PerformanceMonitor
 from lib.chat import LLMPage
 from lib.enhanced_browser import EnhancedTabWidget, get_tab_data
 
-APP_VERSION = "1.3.8"
-BUILD_DATE = "Aug 2024"
+APP_VERSION = "1.4.0"
+BUILD_DATE = "Sep 2024"
 os.environ['QTWEBENGINE_DISABLE_SANDBOX'] = '1'
 
 class CasePreservingConfigParser(configparser.ConfigParser):
@@ -148,6 +148,7 @@ class MainWindow(QMainWindow):
         # Create pages
         self.home_page = self.create_home_page()
         self.llm_page = LLMPage(self.config, base_color)
+        # Create EnhancedTabWidget instances for different sections
         self.sd_page = EnhancedTabWidget(self)
         self.tts_page = EnhancedTabWidget(self)
         self.sts_page = EnhancedTabWidget(self)
@@ -171,7 +172,7 @@ class MainWindow(QMainWindow):
         self.status_bar = QStatusBar()
         self.setStatusBar(self.status_bar)
 
-               # Create a widget to hold all status indicators
+        # Create a widget to hold all status indicators
         self.status_widget = QWidget()
         self.status_layout = QHBoxLayout(self.status_widget)
         self.status_layout.setSpacing(5)
